@@ -12,20 +12,21 @@ from PyQt5.QtGui import QFont, QMouseEvent, QLinearGradient, QPalette, QColor, Q
 from config.settings import settings
 from core.battery_reader import battery_reader
 from core.data_processor import data_processor
+from config_manager import ConfigManager
 
 
 class BatteryOverlay(QMainWindow):
-    """电池监控悬浮窗口 - PyQt5 版本"""
-    
     update_signal = pyqtSignal(dict)
     
-    def __init__(self):
+    def __init__(self, config_manager: ConfigManager):
         super().__init__()
+        self.config_manager = config_manager
         self.setup_window()
         self.create_widgets()
         
         # 连接信号
         self.update_signal.connect(self.update_display)
+        self.config_manager.config_changed.connect(self.on_config_changed)
         
         # 监控状态
         self.monitoring = True
@@ -35,12 +36,32 @@ class BatteryOverlay(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.manual_refresh)
         self.timer.start(settings.update_interval * 1000)
-    
+        
+        # 根据配置初始化显示状态
+        self.update_font()
+        if self.config_manager.get_show_overlay():
+            self.show()
+        else:
+            self.hide()
+
+    def on_config_changed(self):
+        """配置改变时的回调"""
+        self.update_font()
+        if self.config_manager.get_show_overlay():
+            self.show()
+        else:
+            self.hide()
+
+    def update_font(self):
+        font = self.config_manager.get_font()
+        self.percentage_label.setFont(font)
+
     def setup_window(self):
         """设置窗口属性"""
         self.setWindowTitle("电池电量显示器")
-        # 调整窗口大小以适应更大的字体
-        self.setGeometry(100, 50, 180, 80)
+        # 从配置中获取位置
+        pos = self.config_manager.get_window_position()
+        self.setGeometry(pos[0], pos[1], 180, 80)
         
         # 设置窗口属性 - 完全透明
         self.setWindowFlags(
@@ -58,7 +79,7 @@ class BatteryOverlay(QMainWindow):
         
         # 启用鼠标跟踪
         self.setMouseTracking(True)
-    
+
     def create_widgets(self):
         """创建界面组件"""
         # 中央部件 - 完全透明
@@ -67,33 +88,31 @@ class BatteryOverlay(QMainWindow):
         central_widget.setMouseTracking(True)  # 启用鼠标跟踪
         self.setCentralWidget(central_widget)
         
-        # 布局
+        # 布局 - 使用简单的垂直布局
         layout = QVBoxLayout(central_widget)
-        layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.setAlignment(Qt.AlignCenter)
         
-        # 电量百分比显示 - 使用更大的字体
+        # 电量百分比显示
         self.percentage_label = QLabel("---%")
         self.percentage_label.setAlignment(Qt.AlignCenter)
         self.percentage_label.setStyleSheet("background: transparent;")
-        # 使用更大的字体
-        self.percentage_label.setFont(QFont("Arial", 24, QFont.Bold))
-        self.percentage_label.setMouseTracking(True)  # 启用鼠标跟踪
+        self.percentage_label.setMouseTracking(True)
         layout.addWidget(self.percentage_label)
         
         # 设置鼠标悬停效果
         self.percentage_label.enterEvent = self.on_text_hover_enter
         self.percentage_label.leaveEvent = self.on_text_hover_leave
-    
+
     def on_text_hover_enter(self, event):
         """鼠标悬停在文字上时"""
         self.setCursor(Qt.SizeAllCursor)  # 设置为可移动光标
-    
+
     def on_text_hover_leave(self, event):
         """鼠标离开文字时"""
         self.setCursor(Qt.ArrowCursor)  # 恢复默认光标
-    
+
     def start_monitoring(self):
         """开始监控电池状态"""
         def monitor_loop():
@@ -112,7 +131,7 @@ class BatteryOverlay(QMainWindow):
         
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
-    
+
     def update_display(self, data: dict):
         """更新显示"""
         # 根据充电状态设置电量文字样式
@@ -128,7 +147,7 @@ class BatteryOverlay(QMainWindow):
         
         # 更新百分比文本
         self.percentage_label.setText(f"{data['percent']}%")
-    
+
     def apply_gradient_text(self, base_color):
         """应用渐变色文本效果"""
         # 创建渐变色
@@ -156,7 +175,7 @@ class BatteryOverlay(QMainWindow):
         palette = self.percentage_label.palette()
         palette.setBrush(QPalette.WindowText, gradient)
         self.percentage_label.setPalette(palette)
-    
+
     def manual_refresh(self):
         """手动刷新"""
         try:
@@ -166,16 +185,16 @@ class BatteryOverlay(QMainWindow):
                 self.update_display(processed_data)
         except Exception as e:
             print(f"手动刷新时出错: {e}")
-    
+
     def set_transparency(self, alpha: float):
         """设置透明度"""
         self.setWindowOpacity(alpha)
-    
+
     def quit_app(self):
         """退出应用程序"""
         self.monitoring = False
         QApplication.quit()
-    
+
     # 鼠标事件处理
     def mousePressEvent(self, event: QMouseEvent):
         """鼠标按下事件"""
@@ -184,13 +203,16 @@ class BatteryOverlay(QMainWindow):
             event.accept()
         elif event.button() == Qt.RightButton:
             self.show_context_menu(event.globalPos())
-    
+
     def mouseMoveEvent(self, event: QMouseEvent):
         """鼠标移动事件"""
         if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_position'):
-            self.move(event.globalPos() - self.drag_position)
+            new_pos = event.globalPos() - self.drag_position
+            self.move(new_pos)
+            # 保存新位置
+            self.config_manager.set_window_position(new_pos)
             event.accept()
-    
+
     def wheelEvent(self, event):
         """鼠标滚轮事件 - 调整透明度"""
         delta = event.angleDelta().y()
@@ -202,7 +224,7 @@ class BatteryOverlay(QMainWindow):
             new_alpha = max(0.1, current_alpha - 0.1)
         
         self.setWindowOpacity(new_alpha)
-    
+
     def show_context_menu(self, pos):
         """显示右键菜单"""
         menu = QMenu(self)
@@ -211,6 +233,7 @@ class BatteryOverlay(QMainWindow):
                 background-color: rgba(0, 0, 0, 200);
                 color: white;
                 border: 1px solid #555;
+                border-radius: 3px;
             }
             QMenu::item {
                 padding: 5px 20px;
@@ -240,8 +263,18 @@ class BatteryOverlay(QMainWindow):
         
         menu.addSeparator()
         
+        settings_action = QAction("设置", self)
+        settings_action.triggered.connect(self.show_settings)
+        menu.addAction(settings_action)
+        
         quit_action = QAction("退出", self)
         quit_action.triggered.connect(self.quit_app)
         menu.addAction(quit_action)
         
         menu.exec_(pos)
+
+    def show_settings(self):
+        """显示设置窗口"""
+        from ui.settings_window import SettingsWindow
+        self.settings_window = SettingsWindow(self.config_manager)
+        self.settings_window.show()
