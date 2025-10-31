@@ -149,7 +149,7 @@ class BatteryOverlay(QMainWindow):
         self.percentage_label.setText(f"{data['percent']}%")
 
     def apply_gradient_text(self, base_color):
-        """应用渐变色文本效果"""
+        """应用渐变色文本效果 - 上半为纯色渐变至白色，下半为白色"""
         # 创建渐变色
         gradient = QLinearGradient(0, 0, 0, self.percentage_label.height())
         
@@ -167,9 +167,13 @@ class BatteryOverlay(QMainWindow):
             }
             base_qcolor = color_map.get(base_color, QColor(255, 255, 255))
         
-        # 设置渐变色：顶部为纯色，底部为白色
-        gradient.setColorAt(0, base_qcolor)  # 顶部
-        gradient.setColorAt(1, QColor(255, 255, 255))  # 底部
+        # 设置渐变色：
+        # 顶部 (0.0) 为纯色
+        # 中间 (0.5) 为白色，实现上半部分的渐变
+        # 底部 (1.0) 为白色，保持下半部分为白色
+        gradient.setColorAt(0.0, base_qcolor)    # 顶部：纯色
+        gradient.setColorAt(0.75, QColor(255, 255, 255))  # 中间：白色
+        gradient.setColorAt(1.0, QColor(255, 255, 255))  # 底部：白色
         
         # 创建调色板并设置文本刷
         palette = self.percentage_label.palette()
