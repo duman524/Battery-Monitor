@@ -4,9 +4,9 @@
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QComboBox, QCheckBox, QSpinBox, QPushButton, 
-                             QApplication, QFontComboBox, QGroupBox)
+                             QApplication, QFontComboBox, QGroupBox, QSlider)
 from PyQt5.QtCore import Qt, QSettings
-from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor
+from PyQt5.QtGui import QFont
 from config_manager import ConfigManager
 
 
@@ -19,7 +19,7 @@ class SettingsWindow(QWidget):
         
     def init_ui(self):
         self.setWindowTitle("电池悬浮窗设置")
-        self.setFixedSize(450, 400)
+        self.setFixedSize(450, 450)
         
         layout = QVBoxLayout()
         
@@ -65,6 +65,34 @@ class SettingsWindow(QWidget):
         font_group.setLayout(font_layout)
         layout.addWidget(font_group)
         
+        # 透明度设置组
+        transparency_group = QGroupBox("透明度设置")
+        transparency_layout = QVBoxLayout()
+        
+        transparency_slider_layout = QHBoxLayout()
+        transparency_slider_layout.addWidget(QLabel("透明度:"))
+        
+        self.transparency_slider = QSlider(Qt.Horizontal)
+        self.transparency_slider.setRange(10, 100)
+        self.transparency_slider.setValue(self.config_manager.get_transparency())
+        self.transparency_slider.setTickPosition(QSlider.TicksBelow)
+        self.transparency_slider.setTickInterval(10)
+        transparency_slider_layout.addWidget(self.transparency_slider)
+        
+        self.transparency_label = QLabel(f"{self.config_manager.get_transparency()}%")
+        self.transparency_label.setFixedWidth(40)
+        transparency_slider_layout.addWidget(self.transparency_label)
+        
+        transparency_layout.addLayout(transparency_slider_layout)
+        
+        # 提示文字
+        hint_label = QLabel("提示: 也可以通过鼠标滚轮调整透明度")
+        hint_label.setStyleSheet("color: #666; font-size: 9pt;")
+        transparency_layout.addWidget(hint_label)
+        
+        transparency_group.setLayout(transparency_layout)
+        layout.addWidget(transparency_group)
+        
         # 显示设置组
         display_group = QGroupBox("显示设置")
         display_layout = QVBoxLayout()
@@ -97,6 +125,11 @@ class SettingsWindow(QWidget):
         self.font_size_spin.valueChanged.connect(self.update_preview)
         self.bold_check.stateChanged.connect(self.update_preview)
         self.italic_check.stateChanged.connect(self.update_preview)
+        self.transparency_slider.valueChanged.connect(self.on_transparency_changed)
+    
+    def on_transparency_changed(self, value):
+        """透明度滑块值改变"""
+        self.transparency_label.setText(f"{value}%")
     
     def setup_theme(self):
         """根据系统设置主题"""
@@ -174,6 +207,21 @@ class SettingsWindow(QWidget):
             QLabel {
                 color: #ffffff;
             }
+            QSlider::groove:horizontal {
+                background-color: #555;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background-color: #0078d7;
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                margin: -5px 0;
+            }
+            QSlider::handle:horizontal:hover {
+                background-color: #0088e7;
+            }
         """)
     
     def set_light_theme(self):
@@ -238,6 +286,21 @@ class SettingsWindow(QWidget):
             QLabel {
                 color: #000000;
             }
+            QSlider::groove:horizontal {
+                background-color: #e0e0e0;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background-color: #0078d7;
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                margin: -5px 0;
+            }
+            QSlider::handle:horizontal:hover {
+                background-color: #0088e7;
+            }
         """)
     
     def update_preview(self):
@@ -259,6 +322,10 @@ class SettingsWindow(QWidget):
         italic = self.italic_check.isChecked()
         self.config_manager.set_font(font_family, font_size, bold, italic)
         
+        # 保存透明度设置
+        transparency = self.transparency_slider.value()
+        self.config_manager.set_transparency(transparency)
+        
         # 保存显示设置
         show_overlay = self.show_overlay_check.isChecked()
         self.config_manager.set_show_overlay(show_overlay)
@@ -272,4 +339,6 @@ class SettingsWindow(QWidget):
         self.bold_check.setChecked(self.config_manager.default_config["font_bold"])
         self.italic_check.setChecked(self.config_manager.default_config["font_italic"])
         self.show_overlay_check.setChecked(self.config_manager.default_config["show_overlay"])
+        self.transparency_slider.setValue(self.config_manager.default_config["transparency"])
+        self.transparency_label.setText(f"{self.config_manager.default_config['transparency']}%")
         self.update_preview()

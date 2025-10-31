@@ -39,6 +39,7 @@ class BatteryOverlay(QMainWindow):
         
         # 根据配置初始化显示状态
         self.update_font()
+        self.update_transparency()
         if self.config_manager.get_show_overlay():
             self.show()
         else:
@@ -47,6 +48,7 @@ class BatteryOverlay(QMainWindow):
     def on_config_changed(self):
         """配置改变时的回调"""
         self.update_font()
+        self.update_transparency()
         if self.config_manager.get_show_overlay():
             self.show()
         else:
@@ -55,6 +57,11 @@ class BatteryOverlay(QMainWindow):
     def update_font(self):
         font = self.config_manager.get_font()
         self.percentage_label.setFont(font)
+
+    def update_transparency(self):
+        """更新透明度"""
+        transparency = self.config_manager.get_transparency()
+        self.setWindowOpacity(transparency / 100.0)
 
     def setup_window(self):
         """设置窗口属性"""
@@ -74,8 +81,8 @@ class BatteryOverlay(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("background: transparent;")
         
-        # 设置初始透明度
-        self.setWindowOpacity(settings.default_alpha)
+        # 设置初始透明度为100%
+        self.setWindowOpacity(1.0)
         
         # 启用鼠标跟踪
         self.setMouseTracking(True)
@@ -94,7 +101,7 @@ class BatteryOverlay(QMainWindow):
         layout.setSpacing(0)
         layout.setAlignment(Qt.AlignCenter)
         
-        # 电量百分比显示
+        # 电量百分比显示 - 设置亮度100%
         self.percentage_label = QLabel("---%")
         self.percentage_label.setAlignment(Qt.AlignCenter)
         self.percentage_label.setStyleSheet("background: transparent;")
@@ -136,10 +143,10 @@ class BatteryOverlay(QMainWindow):
         """更新显示"""
         # 根据充电状态设置电量文字样式
         if data['plugged']:
-            # 充电状态：渐变色（上纯下白）
+            # 充电状态：渐变色（上半为纯色渐变至白色，下半为白色）
             self.apply_gradient_text(data['color'])
         else:
-            # 不充电状态：纯色
+            # 不充电状态：纯色，亮度100%
             self.percentage_label.setStyleSheet(
                 f"color: {data['color']}; "
                 "background: transparent;"
@@ -169,10 +176,10 @@ class BatteryOverlay(QMainWindow):
         
         # 设置渐变色：
         # 顶部 (0.0) 为纯色
-        # 中间 (0.5) 为白色，实现上半部分的渐变
-        # 底部 (1.0) 为白色，保持下半部分为白色
+        # 上半部分 (0.0-0.5) 从纯色渐变到白色
+        # 下半部分 (0.5-1.0) 保持白色
         gradient.setColorAt(0.0, base_qcolor)    # 顶部：纯色
-        gradient.setColorAt(0.75, QColor(255, 255, 255))  # 中间：白色
+        gradient.setColorAt(0.7, QColor(255, 255, 255))  # 中间：白色
         gradient.setColorAt(1.0, QColor(255, 255, 255))  # 底部：白色
         
         # 创建调色板并设置文本刷
@@ -190,9 +197,10 @@ class BatteryOverlay(QMainWindow):
         except Exception as e:
             print(f"手动刷新时出错: {e}")
 
-    def set_transparency(self, alpha: float):
+    def set_transparency(self, transparency: int):
         """设置透明度"""
-        self.setWindowOpacity(alpha)
+        self.setWindowOpacity(transparency / 100.0)
+        self.config_manager.set_transparency(transparency)
 
     def quit_app(self):
         """退出应用程序"""
@@ -220,17 +228,17 @@ class BatteryOverlay(QMainWindow):
     def wheelEvent(self, event):
         """鼠标滚轮事件 - 调整透明度"""
         delta = event.angleDelta().y()
-        current_alpha = self.windowOpacity()
+        current_transparency = int(self.windowOpacity() * 100)
         
         if delta > 0:  # 向上滚动
-            new_alpha = min(1.0, current_alpha + 0.1)
+            new_transparency = min(100, current_transparency + 10)
         else:  # 向下滚动
-            new_alpha = max(0.1, current_alpha - 0.1)
+            new_transparency = max(10, current_transparency - 10)
         
-        self.setWindowOpacity(new_alpha)
+        self.set_transparency(new_transparency)
 
     def show_context_menu(self, pos):
-        """显示右键菜单"""
+        """显示右键菜单 - 删除透明度选项"""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -250,20 +258,6 @@ class BatteryOverlay(QMainWindow):
         refresh_action = QAction("刷新", self)
         refresh_action.triggered.connect(self.manual_refresh)
         menu.addAction(refresh_action)
-        
-        transparency_menu = menu.addMenu("透明度")
-        
-        transparency_high = QAction("高 (90%)", self)
-        transparency_high.triggered.connect(lambda: self.set_transparency(0.9))
-        transparency_menu.addAction(transparency_high)
-        
-        transparency_medium = QAction("中 (70%)", self)
-        transparency_medium.triggered.connect(lambda: self.set_transparency(0.7))
-        transparency_menu.addAction(transparency_medium)
-        
-        transparency_low = QAction("低 (40%)", self)
-        transparency_low.triggered.connect(lambda: self.set_transparency(0.4))
-        transparency_menu.addAction(transparency_low)
         
         menu.addSeparator()
         

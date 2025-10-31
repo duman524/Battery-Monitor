@@ -20,6 +20,7 @@ class ConfigManager(QObject):
             "font_bold": True,
             "font_italic": False,
             "show_overlay": True,
+            "transparency": 100,  # 默认透明度100%
             "window_position": [100, 50]
         }
         self.config = self.load_config()
@@ -57,6 +58,13 @@ class ConfigManager(QObject):
     
     def get_show_overlay(self):
         return self.config["show_overlay"]
+    
+    def set_transparency(self, transparency):
+        self.config["transparency"] = transparency
+        self.save_config()
+    
+    def get_transparency(self):
+        return self.config.get("transparency", 100)
     
     def set_window_position(self, pos):
         self.config["window_position"] = [pos.x(), pos.y()]
